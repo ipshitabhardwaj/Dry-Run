@@ -939,5 +939,53 @@ def summarise(report: dict) -> dict:
     return report
 
 
-def dry_run(process: Process) -> dict:
-    return Engine(process).run()
+def _same_finding(f: dict, g: dict) -> bool:
+    return (g["type"] == f["type"] and g["severity"] == f["severity"]
+            and (set(g["transitions"]) & set(f["transitions"]) or g["states"][:1] == f["states"][:1]))
+
+
+def apply_patch(process: Process, patch: List[dict]) -> Process:
+    """Return a copy of the process with a few transition fields replaced."""
+    changed = process.model_copy(deep=True)
+    for item in patch:
+        t = changed.transition(item["transition"])
+        for field, value in item["set"].items():
+            setattr(t, field, value)
+    return changed
+
+
+def _counterfactuals(engine: Engine, f: dict) -> List[dict]:
+    """Changes to the *model* that would be worth testing for this finding. These are
+    experiments, not recommendations: each one removes a cause the finding names."""
+    p, out = engine.p, []
+    if f["type"] in ("MISSING_RECOVERY", "TRAPDOOR", "UNREACHABLE", "LOOP"):
+        for tid in f["transitions"]:
+            t = p.transition(tid)
+            if tid in engine.used or not (t.requires or t.forbids):
+                continue
+            needs = [f"it did not require {p.fact_label(x)}" for x in t.requires]
+            needs += [f"it were still allowed when {p.fact_label(x)}" for x in t.forbids]
+            out.append({"label": f"“{t.action}”: what if " + " and ".join(needs) + "?",
+                        "patch": [{"transition": tid, "set": {"requires": [], "forbids": []}}]})
+    if f["type"] == "OWNERLESS" and p.subject:
+        for tid in f["transitions"]:
+            t = p.transition(tid)
+            out.append({"label": f"“{t.action}”: what if the text made {engine._the(p.subject)} "
+                                 f"responsible for it?",
+                        "patch": [{"transition": tid, "set": {"actor": p.subject}}]})
+    return out
+
+
+def dry_run(process: Process, counterfactuals: bool = True) -> dict:
+    engine = Engine(process)
+    report = engine.run()
+    for f in report["findings"]:
+        f["what_if"] = []
+        if not counterfactuals or f["severity"] != "problem":
+            continue
+        for cf in _counterfactuals(engine, f):
+            # Only offer an experiment the engine has already run and seen work.
+            after = dry_run(apply_patch(process, cf["patch"]), counterfactuals=False)
+            if not any(_same_finding(f, g) for g in after["findings"]):
+                f["what_if"].append({**cf, "problems_after": after["summary"]["structural_findings"]})
+    return report

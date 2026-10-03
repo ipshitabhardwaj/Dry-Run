@@ -202,6 +202,15 @@ svg.focus .node.pulse { opacity: 1; }
 #mapcap i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin: 0 5px 0 10px; background: var(--navy); }
 #mapcap i.c { background: var(--coral); }
 .steps { margin: 10px 0 0; padding-left: 20px; } .steps li { margin-bottom: 4px; }
+.whatif { display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px; border-radius: 3px;
+  border: 1px solid var(--navy); background: var(--ivory); color: var(--navy); font-size: 13px; }
+.whatif:hover { background: var(--navy-soft); }
+.whatif b { font: 600 10.5px var(--mono); letter-spacing: .08em; display: block; margin-bottom: 2px; }
+#cf { padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--navy); color: var(--ivory); font-size: 13px; }
+#cf b { font: 600 10.5px var(--mono); letter-spacing: .12em; display: block; margin-bottom: 3px; opacity: .8; }
+#cf button { margin-top: 8px; background: transparent; border: 1px solid rgba(245,241,230,.5); color: var(--ivory);
+  border-radius: 3px; padding: 3px 10px; font-size: 12.5px; }
+#cf button:hover { background: rgba(245,241,230,.14); }
 .empty { padding: 28px 18px; color: var(--muted); }
 .empty b { color: var(--ink); }
 .scen { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; width: 100%; text-align: left; background: none;
@@ -299,6 +308,7 @@ svg.focus .node.pulse { opacity: 1; }
         <button class="tab on" data-list="findings" id="tab-f">Findings</button>
         <button class="tab" data-list="scenarios" id="tab-s">Scenarios</button>
       </div>
+      <div id="cf" class="hidden"></div>
       <div id="banner" class="hidden"></div>
       <div class="colbody" id="list"></div>
     </section>
@@ -403,7 +413,7 @@ $("#go").onclick = async () => {
 
 /* ---------------- workspace ---------------- */
 function openProcess(payload, meta) {
-  Object.assign(S, { process: payload.process, layout: payload.layout, report: null, sel: null, selScen: null,
+  Object.assign(S, { base: null, cf: null, process: payload.process, layout: payload.layout, report: null, sel: null, selScen: null,
     filter: "ALL", list: "findings" });
   S.meta.extract = meta;
   $("#landing").classList.add("hidden");
@@ -609,6 +619,7 @@ function pulse(stateId) {
 let wantRefute = false;
 $("#run").onclick = async () => {
   const btn = $("#run"); btn.disabled = true;
+  if (S.base) { S.process = S.base.process; S.base = null; S.cf = null; $("#json").textContent = JSON.stringify(S.process, null, 2); }
   trace = null; S.sel = null; S.selScen = null; S.report = null; drawList(); paint();
   $("#now").textContent = S.process.origin === "llm" ? "Running the engine, then checking absence findings against the text…" : "Running the engine…";
   let report;
@@ -649,6 +660,17 @@ function drawList() {
   $("#tab-s").classList.toggle("on", S.list === "scenarios");
   $("#tab-f").textContent = r ? `Findings (${r.findings.length})` : "Findings";
   $("#tab-s").textContent = r ? `Scenarios (${r.scenarios.length})` : "Scenarios";
+  const cf = $("#cf");
+  cf.classList.toggle("hidden", !S.cf);
+  if (S.cf) {
+    const c = S.cf;
+    cf.innerHTML = `<b>CHANGED MODEL · RE-RUN</b>${esc(c.label)}<br>`
+      + (c.gone ? `The ${esc(TYPE_LABEL[c.type] || c.type)} finding no longer appears.` : `The finding is still there.`)
+      + ` Structural problems: ${c.before} → ${c.after}.`
+      + (c.fresh.length ? ` The change exposed ${c.fresh.length} new problem${c.fresh.length === 1 ? "" : "s"}, shown below.` : "")
+      + `<br><button id="restore">Restore the original document</button>`;
+    $("#restore").onclick = restore;
+  }
   const banner = $("#banner");
   banner.classList.toggle("hidden", !(S.process && S.process.origin === "llm"));
   banner.innerHTML = "This model was extracted automatically. Confidence is lowered on every finding; verify against the cited sentences."
@@ -702,10 +724,46 @@ function drawList() {
     if (S.sel) replay();
   });
   const rp = $(".replay", host); if (rp) rp.onclick = replay;
+  $$(".whatif", host).forEach(b => b.onclick = () => whatIf(b.dataset.f, +b.dataset.i));
   $$(".story li", host).forEach(li => { li.onmouseenter = () => pulse(li.dataset.state); li.onmouseleave = () => pulse(null); });
   $$(".evi", host).forEach(d => d.onclick = () => {
     const row = $(`#src .sent[data-id="${d.dataset.id}"]`); if (row) row.scrollIntoView({ block: "center" });
   });
+}
+async function whatIf(fid, i) {
+  // Fix and re-run: change one thing in the model, run the same engine again, compare.
+  const base = S.base || { process: S.process, report: S.report };
+  const f = base.report.findings.find(x => x.id === fid), w = f.what_if[i];
+  const changed = JSON.parse(JSON.stringify(base.process));
+  for (const item of w.patch) Object.assign(changed.transitions.find(t => t.id === item.transition), item.set);
+  let report;
+  try { report = await api("/api/run", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ process: changed }) }); }
+  catch (e) { $("#now").textContent = "Re-run failed: " + e.message; return; }
+  const same = g => g.type === f.type && g.severity === f.severity &&
+    (g.transitions.some(t => f.transitions.includes(t)) || g.states[0] === f.states[0]);
+  const before = base.report.summary.structural_findings, after = report.summary.structural_findings;
+  const titles = new Set(base.report.findings.map(x => x.type + "|" + x.title));
+  const fresh = report.findings.filter(x => x.severity === "problem" && !titles.has(x.type + "|" + x.title));
+  S.base = base; S.process = changed; S.report = report; S.sel = fresh.length ? fresh[0].id : null; S.selScen = null; trace = null;
+  S.cf = { label: w.label, title: f.title, type: f.type, gone: !report.findings.some(same), before, after, fresh };
+  $("#json").textContent = JSON.stringify(changed, null, 2);
+  showCounts(report); drawList(); paint();
+}
+function restore() {
+  if (!S.base) return;
+  S.process = S.base.process; S.report = S.base.report; S.base = null; S.cf = null; S.sel = null; trace = null;
+  $("#json").textContent = JSON.stringify(S.process, null, 2);
+  showCounts(S.report); drawList(); paint();
+}
+function showCounts(report) {
+  const sm = report.summary;
+  $("#c-scen").textContent = sm.scenarios; $("#c-done").textContent = sm.completed; $("#c-amb").textContent = sm.ambiguous;
+  $("#c-prob").textContent = sm.structural_findings;
+  $("#c-prob-cell").classList.toggle("bad", sm.structural_findings > 0);
+  $("#now").textContent = (S.cf ? "Re-run on the changed model. " : "Original model. ")
+    + `${sm.scenarios} scenarios over ${sm.configurations_explored} reachable configurations. `
+    + `${sm.structural_findings} structural problem${sm.structural_findings === 1 ? "" : "s"}, ${sm.ambiguous_findings} ambiguit${sm.ambiguous_findings === 1 ? "y" : "ies"}.`;
 }
 let replayRun = 0;
 async function replay() {
@@ -733,6 +791,9 @@ function detail(f) {
     ${story ? `<h4>What happens: ${esc(f.scenario)} <button class="replay">▶ replay on map</button></h4><ol class="story">${story}</ol>` : ""}
     <h4>Evidence</h4>${evid}
     <h4>What is missing</h4><p>${esc(f.missing)}</p>
+    ${(f.what_if || []).length && !S.cf ? `<h4>Test a change</h4>` + f.what_if.map((w, i) =>
+      `<button class="whatif" data-f="${f.id}" data-i="${i}"><b>CHANGE THE MODEL AND RE-RUN</b>${esc(w.label)}</button>`).join("")
+      + `<p class="note">An experiment on the model, not a recommended policy fix.</p>` : ""}
     <h4>Why this was flagged</h4><ol>${f.why.map(w => `<li>${esc(w)}</li>`).join("")}</ol>
     <h4>Confidence</h4><p>${f.confidence.toFixed(2)} (${f.confidence_label}).${esc(lowered)}</p>
     ${f.scenarios.length ? `<p class="note mono">Seen in ${f.scenarios.join(", ")}</p>` : ""}

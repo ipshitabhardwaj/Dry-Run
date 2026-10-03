@@ -1,6 +1,6 @@
 """Each test builds a tiny process by hand and checks one behaviour of the engine."""
 from dryrun.demos import build_process, load_demo
-from dryrun.engine import dry_run
+from dryrun.engine import apply_patch, dry_run
 
 
 def make(clauses, states, transitions, facts=(), initial=(), subject="user"):
@@ -260,3 +260,21 @@ def test_findings_are_not_hardcoded_fixing_the_text_removes_them():
 def test_engine_is_deterministic():
     a, b = dry_run(load_demo("3_travel")), dry_run(load_demo("3_travel"))
     assert a == b
+
+
+def test_counterfactuals_remove_the_finding_they_belong_to():
+    """Fix and re-run: each offered change is one the engine has already verified."""
+    p = load_demo("1_admission")
+    report = dry_run(p)
+    offered = {f["type"]: f["what_if"] for f in report["findings"] if f["severity"] == "problem"}
+    assert all(offered[t] for t in ("MISSING_RECOVERY", "TRAPDOOR", "UNREACHABLE", "OWNERLESS"))
+    assert offered["SILENT_DEFAULT"] == []            # no honest one-step experiment exists for it
+    f = next(f for f in report["findings"] if f["type"] == "MISSING_RECOVERY")
+    cf = f["what_if"][0]
+    assert cf["patch"] == [{"transition": "t_retry", "set": {"requires": [], "forbids": []}}]
+    assert "application status 'Active'" in cf["label"]
+    after = dry_run(apply_patch(p, cf["patch"]))
+    assert "MISSING_RECOVERY" not in types(after, "problem")
+    assert after["summary"]["structural_findings"] == cf["problems_after"] == 4
+    assert p.transition("t_retry").requires == ["status_active"]      # the original is untouched
+    assert all(not f["what_if"] for f in report["findings"] if f["severity"] != "problem")
