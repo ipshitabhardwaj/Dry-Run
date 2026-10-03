@@ -54,6 +54,10 @@ because of a bank error, and no single sentence is wrong.
 Dry Run reports this as `MISSING_RECOVERY`, replays the path on the map, and
 highlights c4, c6, c7 and c8 with the reason each one is cited.
 
+![The retry finding: the path on the process map, the cited sentences, and the step-by-step story](docs/finding.png)
+
+*The admission example after "Run dry test". Left: the process as a state machine, with the path taken in navy and the point of failure in coral. Middle: the source text, with each cited sentence and why it is cited. Right: the finding and the simulated applicant's steps.*
+
 ---
 
 ## Quick start (no model needed)
@@ -179,6 +183,10 @@ change it has already verified removes that finding.
 This is an experiment on the model, not a recommended policy fix. Some changes
 remove one problem and expose another; the interface shows that too.
 
+![After re-running on a changed model: the missing-recovery finding is gone and structural problems go from 5 to 4](docs/rerun.png)
+
+*After testing "what if the retry did not require status 'Active'?": the finding no longer appears and the count moves from 5 to 4.*
+
 ### Keeping the model honest
 
 - The model is never asked what is wrong with the process.
@@ -300,6 +308,7 @@ demos/*.json         three hand-checked models
 samples/             a short document for trying extraction
 scripts/check_model.py   smoke test and timing against a real Ollama model
 tests/               pytest suite
+docs/                screenshots used in this README
 DRY_RUN_AUDIT.md     the author's audit of the extraction layer
 ```
 
