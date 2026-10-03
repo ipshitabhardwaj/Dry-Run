@@ -4,7 +4,16 @@ Test your process before reality does.
 
 Dry Run takes a written process (a policy, an SOP, a rulebook), converts it to
 an explicit state model, injects realistic failures, and reports where people
-get stuck. Every finding cites the exact source sentences it rests on.
+get stuck. Every finding cites the source sentences its model was built from,
+and shows the path that led there.
+
+**Status, stated plainly**
+
+| Part | State |
+|---|---|
+| Deterministic engine | Works. Covered by the test suite, one small process per finding type. |
+| Three demo processes | Work. The models are hand-checked, so they need no language model. |
+| Extraction from your own document (Phi-4-mini) | Experimental. See "Measured extraction results" below. |
 
     document -> numbered sentences -> LLM extraction -> Process model
              -> deterministic engine -> findings with evidence
@@ -36,10 +45,11 @@ Uploads and pasted text are read by an open-weight model served locally by
 
     ollama pull phi4-mini
     ollama serve                      # if it is not already running
-    python scripts/check_model.py     # proves the model answers, then tries the admission text
+    python scripts/check_model.py     # checks the model answers, then tries the admission text
+    python scripts/check_model.py samples/payment_short.txt   # a seven-sentence example
     python -m dryrun
 
-**Model:** Microsoft Phi-4-mini (3.8B parameters, about 2.5 GB as served by
+**Model:** Microsoft Phi-4-mini (3.84B parameters, about 2.5 GB as served by
 Ollama under the tag `phi4-mini`).
 **Licence:** MIT, <https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/main/LICENSE>.
 
@@ -49,8 +59,11 @@ Ollama under the tag `phi4-mini`).
 | `OLLAMA_HOST`  | `http://localhost:11434` | where Ollama listens            |
 | `DRYRUN_PORT`  | `8000`                   | port for the web page           |
 
-Any Ollama model that supports structured outputs will work, for example
-`DRYRUN_MODEL=qwen2.5:7b` (Apache 2.0) on a machine with more memory. If you
+Only Phi-4-mini has been tried. The model sits behind one interface
+(`dryrun/llm.py`), so another Ollama model that supports structured outputs can
+be selected with `DRYRUN_MODEL`, for example `qwen2.5:7b` (Apache 2.0) on a
+machine with more memory. `DRYRUN_NUM_CTX` (default 8192) sets the context
+size; 4096 fits a 4 GB GPU better. If you
 change the model, change the name and licence link above to match.
 
 ## What the engine checks
@@ -89,17 +102,36 @@ which of these applied.
 
 1. The text is split deterministically into sentences `c1, c2, ...` with exact
    character offsets.
-2. The model sees the numbered sentences and must cite ids, never quotes. It
-   is called in small JSON-schema-constrained steps: actors and states; then
-   transitions, eight sentences at a time; then facts and what each transition
-   requires, forbids, grants or revokes; then narrow follow-ups (what happens
-   when this step fails, who stands in for this actor, is this state final).
-3. The output is validated: references to unknown ids are dropped, and
-   anything without a sentence id is marked `inferred`.
-4. Refutation pass: for each finding that rests on absence, the model gets one
-   yes/no question ("does any sentence say what happens when X fails? cite
-   it"). A yes with a real sentence id downgrades the finding to ambiguous and
-   shows the sentence. A yes without a valid citation changes nothing.
+2. The model sees the numbered sentences and answers four to six small
+   JSON-schema-constrained questions: actors and states; transitions, ten
+   sentences at a time; what the text says when a step fails; conditions (what
+   each step requires, forbids, grants, revokes); and which end states are final.
+3. Every id the model may return (sentence, state, actor, transition) is a
+   closed list in the schema, so it cannot cite a sentence that does not exist.
+4. A promised retry is modelled as a real action, so the engine can test
+   whether it is actually possible in the state the failure leaves behind.
+5. The output is validated: references to unknown ids are dropped, and anything
+   without a sentence id is marked `inferred`.
+6. On an extracted model, a finding that rests on an inferred step is labelled
+   **unverified** and is not counted as a structural problem. It may be a gap
+   in the model and not in the document.
+7. Optional refutation pass (a button in the findings panel): for each finding
+   that rests on the text not saying something, the model gets one yes/no
+   question and must cite a sentence. A yes with a real sentence downgrades the
+   finding to ambiguous and shows the sentence.
+
+## Measured extraction results (Phi-4-mini, RTX 3050 4 GB, 18-clause admission text)
+
+| Run | Time | Model calls | Known problems found (of 5) |
+|---|---|---|---|
+| First version | about 19 min | 15 to 20 | 0, plus false findings |
+| After batching calls and capping answers | 264 s | 7 | 0, plus false findings |
+| After constraining ids in the schema | 299 s | 7 | 0 |
+
+The model confused field names with their allowed values and described most
+steps with a single keyword. The schema has since been changed to remove that
+confusion; that change has not yet been measured on the real model. Treat
+extraction as a research problem this project has instrumented, not solved.
 
 ## Layout
 
@@ -117,15 +149,35 @@ which of these applied.
 
 ## Known limitations
 
-- Extraction quality with a real model has not been measured. The pipeline is
-  tested with a scripted fake client only. Expect to tune the prompts in
-  `dryrun/extract.py` after running `scripts/check_model.py`.
+- Extraction with the real model is unreliable (see the measured results
+  above). The automated tests for extraction use a scripted fake client, so
+  they check the plumbing and say nothing about model accuracy.
+- A finding is correct relative to the model it was computed from. If the
+  extracted model is wrong, the finding is wrong.
+- The three demo documents were written for this project; their models are
+  hand-checked. No real-world policy has been tested yet.
+- Confidence labels come from fixed deductions, not from calibration.
+- Exploration stops at 20,000 configurations.
+- Delegates ("X acts when Y is away") are not extracted from uploads.
 - Documents are capped at 20,000 characters, because the whole numbered text
   goes into each prompt. Scanned PDFs have no text layer and are rejected.
 - The engine injects one disruption at a time. It does not combine them.
 - Time is not modelled numerically: a deadline is a label, and a timer is a
   transition that fires when nothing else does.
 - The model cannot be edited in the browser, and there is no version comparison.
+
+## How this was built (disclosure)
+
+- Built for Hacktoberfest Hack Day Chandigarh, 3 October 2026, as a solo entry.
+- An AI coding assistant (Claude) was used throughout, as the event rules
+  permit. The engine, extractor, server, interface and tests were produced with
+  it and reviewed, run and audited by the author; `DRY_RUN_AUDIT.md` is the
+  author's own audit of the extraction layer.
+- The work started from an engine starter (process model, engine, three demo
+  models, an early extractor) that was also AI-assisted.
+- Dependencies: FastAPI, Uvicorn, Pydantic, python-multipart, pypdf,
+  python-docx, pytest, httpx. See each project for its licence.
+- Model: Microsoft Phi-4-mini, MIT licence, run locally through Ollama.
 
 ## Licence
 
