@@ -1,5 +1,10 @@
 # Dry Run — Audit & Improvement Checklist
 
+> **Note on timing.** Written at about 2:15 PM on 3 October 2026, midway through the build.
+> Several items below were addressed afterwards (number of model calls, retry
+> representation, id grounding, unverified findings, fix and re-run). See the
+> README for the current state and the measured results.
+
 > Working audit document for the current hackathon build.
 >
 > Goal: make the existing core trustworthy before adding features.
