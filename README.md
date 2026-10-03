@@ -328,7 +328,9 @@ No proprietary API is needed for any part of the flow.
   it and were run, reviewed and audited by the author. `DRY_RUN_AUDIT.md` is
   the author's own audit of the extraction layer.
 - The work started from an engine starter (process model, engine, three demo
-  models, an early extractor) that was also AI-assisted.
+  models, an early extractor) that was also AI-assisted and was created during
+  the event, after hacking began at 10:30 AM. No code from before the event is
+  included.
 
 ## What comes next
 
