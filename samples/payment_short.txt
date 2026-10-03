@@ -1,0 +1,7 @@
+1. An applicant who receives an offer must accept the seat on the admissions portal within 5 days of the offer.
+2. The applicant must pay the seat acceptance fee through the payment page within 48 hours of accepting.
+3. When a payment is initiated, the application status changes from 'Active' to 'Payment Pending' until the bank confirms the transaction.
+4. Once the bank confirms payment, the applicant is admitted.
+5. If a payment attempt fails, the applicant may retry from the payment page.
+6. The payment page is available only to applications with the status 'Active'.
+7. Applications without a confirmed payment after 48 hours are cancelled and the seat is released to the waiting list.

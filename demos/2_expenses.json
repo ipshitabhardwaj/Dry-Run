@@ -1,0 +1,61 @@
+{
+  "title": "Expense reimbursement policy",
+  "blurb": "A nine-clause finance policy with a delegate rule that works, and two places a valid claim quietly dies.",
+  "persona": "Arjun",
+  "subject": "employee",
+  "clauses": [
+    "An employee submits an expense claim with receipts within 30 days of the expense.",
+    "The employee's line manager approves or rejects the claim.",
+    "Claims above ₹50,000 also require approval from the Finance Controller after the line manager approves.",
+    "If the line manager is on leave, their delegate acts on their behalf.",
+    "Rejected claims may be corrected and resubmitted by the employee.",
+    "Approved claims are paid by Payroll in the next monthly cycle.",
+    "If a payment bounces because of incorrect bank details, Payroll informs the employee.",
+    "Claims not approved within 60 days of submission are closed automatically.",
+    "The Finance Controller reviews high-value claims on the last working day of each month."
+  ],
+  "actors": [
+    {"id": "employee", "name": "Employee"},
+    {"id": "manager", "name": "Line Manager"},
+    {"id": "delegate", "name": "Manager's delegate"},
+    {"id": "finance", "name": "Finance Controller"},
+    {"id": "payroll", "name": "Payroll"}
+  ],
+  "start": "draft",
+  "states": [
+    {"id": "draft", "label": "Expense incurred", "kind": "start", "evidence": ["c1"]},
+    {"id": "submitted", "label": "Awaiting manager decision", "evidence": ["c2"]},
+    {"id": "rejected", "label": "Rejected", "kind": "setback", "evidence": ["c5"]},
+    {"id": "fin_review", "label": "Awaiting Finance Controller", "evidence": ["c3", "c9"]},
+    {"id": "approved", "label": "Approved", "evidence": ["c6"]},
+    {"id": "paid", "label": "Paid", "kind": "terminal", "outcome": "success", "evidence": ["c6"]},
+    {"id": "bounced", "label": "Payment bounced", "kind": "setback", "evidence": ["c7"]},
+    {"id": "closed", "label": "Closed automatically", "kind": "terminal", "outcome": "failure", "evidence": ["c8"]}
+  ],
+  "transitions": [
+    {"id": "t_submit", "from": "draft", "to": "submitted", "actor": "employee",
+     "action": "submit the claim with receipts", "deadline": "within 30 days of the expense", "evidence": ["c1"]},
+    {"id": "t_approve", "from": "submitted", "to": "approved", "actor": "manager", "delegates": ["delegate"],
+     "action": "approve the claim", "evidence": ["c2", "c4"]},
+    {"id": "t_approve_high", "from": "submitted", "to": "fin_review", "actor": "manager", "delegates": ["delegate"],
+     "action": "approve a claim above ₹50,000 and pass it to Finance", "evidence": ["c2", "c3", "c4"]},
+    {"id": "t_reject", "from": "submitted", "to": "rejected", "actor": "manager", "delegates": ["delegate"],
+     "action": "reject the claim", "evidence": ["c2", "c4"]},
+    {"id": "t_resubmit", "from": "rejected", "to": "submitted", "actor": "employee",
+     "action": "correct and resubmit the claim", "evidence": ["c5"]},
+    {"id": "t_fin_ok", "from": "fin_review", "to": "approved", "actor": "finance",
+     "action": "approve the high-value claim", "evidence": ["c3", "c9"]},
+    {"id": "t_close_sub", "from": "submitted", "to": "closed", "trigger": "timer",
+     "action": "close the claim automatically 60 days after submission", "evidence": ["c8"]},
+    {"id": "t_close_fin", "from": "fin_review", "to": "closed", "trigger": "timer",
+     "action": "close the claim automatically 60 days after submission", "evidence": ["c8"]},
+    {"id": "t_close_rej", "from": "rejected", "to": "closed", "trigger": "timer",
+     "action": "close the claim automatically 60 days after submission", "evidence": ["c8"]},
+    {"id": "t_pay", "from": "approved", "to": "paid", "actor": "payroll",
+     "action": "pay the claim in the next monthly cycle", "can_fail": true,
+     "failure_label": "the payment bounces because of incorrect bank details", "evidence": ["c6"]},
+    {"id": "t_bounce", "from": "approved", "to": "bounced", "actor": "payroll",
+     "kind": "failure_handler", "on_failure_of": "t_pay",
+     "action": "inform the employee that the payment bounced", "evidence": ["c7"]}
+  ]
+}

@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dry Run</title>
+<style>
+:root {
+  --ivory: #F5F1E6; --paper: #FBF9F2; --line: #D9D3C2; --line-soft: #E7E2D3;
+  --ink: #2A2B2E; --muted: #6C6A62; --navy: #14233F; --navy-soft: #E3E6EC;
+  --coral: #C9553F; --coral-soft: #F6E1DA;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--ivory); color: var(--ink); font: 14px/1.5 var(--sans); }
+button, textarea, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.mono { font-family: var(--mono); }
+.hidden { display: none !important; }
+:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+
+/* ---------- top bar ---------- */
+header { display: flex; align-items: center; gap: 16px; height: 48px; padding: 0 20px;
+  background: var(--navy); color: var(--ivory); }
+.mark { font: 600 13px var(--mono); letter-spacing: .18em; text-transform: uppercase; }
+.mark i { display: inline-block; width: 9px; height: 9px; border: 2px solid var(--ivory);
+  border-radius: 50%; margin-right: 9px; vertical-align: -1px; }
+header .title { font-size: 13px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header .spacer { flex: 1; }
+header .chip { font: 12px var(--mono); opacity: .8; white-space: nowrap; }
+header button { background: transparent; border: 1px solid rgba(245,241,230,.45); color: var(--ivory);
+  padding: 4px 12px; border-radius: 3px; font-size: 13px; }
+header button:hover { background: rgba(245,241,230,.12); }
+
+/* ---------- landing ---------- */
+#landing { max-width: 1080px; margin: 0 auto; padding: 56px 24px 64px; }
+#landing h1 { font-size: 46px; line-height: 1.1; margin: 0; color: var(--navy); letter-spacing: -.02em; }
+#landing .sub { font-size: 21px; color: var(--ink); margin: 8px 0 6px; }
+#landing .how { color: var(--muted); max-width: 720px; margin: 0 0 36px; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.panel { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 18px; }
+.panel h2 { font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 12px; }
+#drop { border: 1.5px dashed var(--line); border-radius: 4px; padding: 22px 12px; text-align: center;
+  color: var(--muted); background: var(--ivory); }
+#drop.over { border-color: var(--navy); color: var(--navy); }
+#drop b { color: var(--navy); }
+textarea { width: 100%; min-height: 150px; resize: vertical; margin-top: 12px; padding: 10px;
+  background: #fff; border: 1px solid var(--line); border-radius: 3px; font: 13px/1.5 var(--mono); }
+.row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.btn { background: var(--navy); color: var(--ivory); border: 1px solid var(--navy); border-radius: 3px;
+  padding: 8px 16px; font-weight: 600; }
+.btn:hover { background: #1d3158; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.ghost { background: transparent; color: var(--navy); }
+.note { color: var(--muted); font-size: 13px; }
+.demo { display: block; width: 100%; text-align: left; background: var(--ivory); border: 1px solid var(--line);
+  border-radius: 4px; padding: 12px 14px; margin-bottom: 10px; }
+.demo:hover { border-color: var(--navy); }
+.demo strong { display: block; color: var(--navy); font-size: 15px; }
+.demo span { color: var(--muted); font-size: 13px; }
+.demo em { font: normal 11px var(--mono); color: var(--muted); float: right; }
+#msg { margin-top: 14px; padding: 10px 12px; border-left: 3px solid var(--coral); background: var(--coral-soft); }
+#extracting { margin-top: 14px; border: 1px solid var(--line); background: var(--ivory); border-radius: 3px;
+  padding: 10px 12px; font: 12px/1.7 var(--mono); max-height: 220px; overflow: auto; }
+#extracting div::before { content: "✓ "; color: var(--navy); }
+#extracting div:last-child::before { content: "… "; }
+.pipeline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 30px; font: 12px var(--mono); color: var(--muted); }
+.pipeline span { border: 1px solid var(--line); border-radius: 3px; padding: 3px 8px; background: var(--paper); }
+.pipeline b { font-weight: 400; align-self: center; }
+
+/* ---------- workspace ---------- */
+#work { display: flex; flex-direction: column; height: calc(100vh - 48px); }
+#runbar { display: flex; align-items: stretch; gap: 0; border-bottom: 1px solid var(--line); background: var(--paper); }
+#runbar .cell { padding: 10px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; }
+#runbar .cell.grow { flex: 1; min-width: 0; border-right: 0; }
+.count b { font: 600 22px/1.1 var(--mono); color: var(--navy); display: block; }
+.count small { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.count.bad b { color: var(--coral); }
+#track { height: 6px; background: var(--line-soft); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+#bar { height: 100%; width: 0; background: var(--navy); }
+#now { font: 12px var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#origin { font-size: 12px; color: var(--muted); }
+
+#grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 310px 400px; }
+.col { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+.col:last-child { border-right: 0; }
+.colhead { display: flex; align-items: center; gap: 4px; height: 38px; padding: 0 12px; border-bottom: 1px solid var(--line);
+  font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); flex: none; }
+.colhead .tab { background: none; border: 0; border-bottom: 2px solid transparent; height: 38px; padding: 0 8px;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--muted); }
+.colhead .tab.on { color: var(--navy); border-bottom-color: var(--navy); }
+.colbody { flex: 1; min-height: 0; overflow: auto; }
+
+/* map */
+#map { padding: 12px; }
+#map svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+.node rect { fill: var(--paper); stroke: var(--navy); stroke-width: 1.3; }
+.node text { font: 14px var(--sans); fill: var(--ink); text-anchor: middle; pointer-events: none; }
+.node .tag { font: 600 9.5px var(--mono); letter-spacing: .1em; fill: var(--muted); }
+.node.start rect { fill: var(--navy); }
+.node.start text, .node.start .tag { fill: var(--ivory); }
+.node.setback rect { stroke-dasharray: 5 3; }
+.node .inner { fill: none; stroke: var(--navy); stroke-width: 1; }
+.node { cursor: pointer; }
+.edge path.line { fill: none; stroke: var(--navy); stroke-width: 1.2; opacity: .75; }
+.edge path.hitbox { fill: none; stroke: transparent; stroke-width: 12; }
+.edge.timer path.line { stroke-dasharray: 1.5 4; stroke-linecap: round; stroke-width: 1.8; }
+.edge.event path.line { stroke-dasharray: 10 4; }
+.edge.failure_handler path.line { stroke-dasharray: 4 3; }
+.elabel { font: 12.5px var(--sans); fill: var(--navy); text-anchor: middle; paint-order: stroke;
+  stroke: var(--ivory); stroke-width: 6px; stroke-linejoin: round; display: none; pointer-events: none; }
+.elabel.show, .elabel.path, .elabel.hit, .elabel.cite { display: block; }
+.elabel.hit { fill: var(--coral); font-weight: 600; }
+svg.amb .elabel.hit { fill: var(--navy); }
+.edge:hover path.line { opacity: 1; stroke-width: 2; }
+svg.focus .node, svg.focus .edge { opacity: .22; }
+svg.focus .node.path, svg.focus .edge.path, svg.focus .node.hit, svg.focus .edge.hit,
+svg.focus .node.cite, svg.focus .edge.cite { opacity: 1; }
+.node.path rect, .node.cite rect { stroke-width: 2.4; }
+.edge.path path.line, .edge.cite path.line { stroke-width: 2.4; opacity: 1; }
+.node.hit rect { stroke: var(--coral); stroke-width: 2.6; fill: var(--coral-soft); }
+.node.hit text { fill: var(--ink); } .node.hit .tag { fill: var(--coral); }
+.node.hit .inner { stroke: var(--coral); }
+.edge.hit path.line { stroke: var(--coral); stroke-width: 2.6; opacity: 1; }
+svg.amb .node.hit rect { stroke: var(--navy); fill: var(--navy-soft); stroke-width: 2.6; }
+svg.amb .node.hit .tag { fill: var(--navy); } svg.amb .node.hit .inner { stroke: var(--navy); }
+svg.amb .edge.hit path.line { stroke: var(--navy); }
+.node.pulse rect { stroke-width: 4; }
+#legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--line);
+  font: 11px var(--mono); color: var(--muted); flex: none; }
+#legend svg { vertical-align: middle; margin-right: 5px; }
+#json { margin: 0; padding: 14px; font: 12px/1.55 var(--mono); white-space: pre; color: var(--ink); }
+
+/* source */
+.sent { display: grid; grid-template-columns: 34px 1fr; gap: 6px; padding: 7px 12px 7px 9px; border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--line-soft); cursor: pointer; font-size: 13.5px; }
+.sent .n { font: 11px/1.9 var(--mono); color: var(--muted); }
+.sent:hover { background: var(--paper); }
+.sent.cite { border-left-color: var(--navy); background: var(--navy-soft); }
+.sent.ev { border-left-color: var(--coral); background: var(--coral-soft); }
+.sent.ev.amb { border-left-color: var(--navy); background: var(--navy-soft); }
+.sent .because { grid-column: 2; font-size: 12px; color: var(--muted); margin-top: 3px; }
+.sent .because::before { content: "cited because: "; font-family: var(--mono); font-size: 11px; }
+#src.focus .sent:not(.ev):not(.cite) { opacity: .45; }
+
+/* findings */
+#filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.fchip { font: 11px var(--mono); padding: 3px 8px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--paper); color: var(--ink); }
+.fchip.on { background: var(--navy); border-color: var(--navy); color: var(--ivory); }
+.card { border-bottom: 1px solid var(--line); }
+.card > button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 12px 14px;
+  border-left: 3px solid transparent; }
+.card > button:hover { background: var(--paper); }
+.card.sel > button { background: var(--paper); border-left-color: var(--coral); }
+.card.sel.ambiguous > button { border-left-color: var(--navy); }
+.meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.badge { font: 600 10.5px var(--mono); letter-spacing: .06em; padding: 2px 7px; border-radius: 2px;
+  background: var(--coral); color: #fff; }
+.ambiguous .badge { background: transparent; color: var(--navy); box-shadow: inset 0 0 0 1px var(--navy); }
+.fid { font: 11px var(--mono); color: var(--muted); }
+.conf { margin-left: auto; font: 11px var(--mono); color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.conf i { display: inline-block; width: 46px; height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.conf i b { display: block; height: 100%; background: var(--navy); }
+.card h3 { margin: 0; font-size: 14.5px; line-height: 1.35; color: var(--ink); font-weight: 600; }
+.detail { padding: 2px 14px 16px 17px; background: var(--paper); }
+.detail h4 { font: 600 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  margin: 16px 0 6px; }
+.detail p { margin: 0 0 6px; }
+.detail ol { margin: 0; padding-left: 20px; }
+.detail ol li { margin-bottom: 3px; }
+.story { list-style: none; padding: 0; margin: 0; border-left: 2px solid var(--line); }
+.story li { position: relative; padding: 3px 0 7px 14px; cursor: default; }
+.story li::before { content: ""; position: absolute; left: -5px; top: 9px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--paper); border: 2px solid var(--navy); }
+.story li.disruption::before { background: var(--navy); }
+.story li.stuck::before { background: var(--coral); border-color: var(--coral); }
+.ambiguous .story li.stuck::before { background: var(--navy); border-color: var(--navy); }
+.story .who { font: 11px var(--mono); color: var(--muted); display: block; }
+.story .to { color: var(--muted); }
+.story li.disruption .who::after { content: "  · injected disruption"; }
+.evi { border-left: 2px solid var(--line); padding: 2px 0 6px 10px; margin-bottom: 6px; cursor: pointer; }
+.evi .n { font: 11px var(--mono); color: var(--navy); }
+.evi small { display: block; color: var(--muted); }
+.evi.refute { border-left-color: var(--navy); }
+.empty { padding: 28px 18px; color: var(--muted); }
+.empty b { color: var(--ink); }
+.scen { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; width: 100%; text-align: left; background: none;
+  border: 0; border-bottom: 1px solid var(--line-soft); padding: 7px 12px; font-size: 13px; }
+.scen:hover, .scen.sel { background: var(--paper); }
+.scen .n { font: 11px/1.8 var(--mono); color: var(--muted); }
+.scen small { display: block; color: var(--muted); font: 11px var(--mono); }
+.st { font: 11px/1.8 var(--mono); }
+.st.problem { color: var(--coral); font-weight: 600; }
+.st.completed { color: var(--muted); } .st.ambiguous { color: var(--navy); }
+#banner { padding: 8px 14px; font-size: 12.5px; border-bottom: 1px solid var(--line); background: var(--navy-soft); color: var(--navy); }
+
+@media (max-width: 1180px) {
+  #work { height: auto; }
+  #grid { grid-template-columns: 1fr; }
+  .col { border-right: 0; border-bottom: 1px solid var(--line); }
+  .colbody { max-height: 70vh; }
+  #runbar { flex-wrap: wrap; }
+  .cols { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: no-preference) { #bar { transition: width .08s linear; } }
+</style>
+</head>
+<body>
+<header>
+  <span class="mark"><i></i>Dry Run</span>
+  <span class="title" id="htitle"></span>
+  <span class="spacer"></span>
+  <span class="chip" id="llmchip"></span>
+  <button id="newtest" class="hidden">New test</button>
+</header>
+
+<main id="landing">
+  <h1>Dry Run.</h1>
+  <p class="sub">Test your process before reality does.</p>
+  <p class="how">Give it a policy, an SOP or a rulebook. It turns the text into an explicit state model,
+    injects realistic failures, and reports where a person gets stuck. Every finding cites the exact
+    sentences it rests on.</p>
+  <div class="cols">
+    <section class="panel">
+      <h2>Your document</h2>
+      <div id="drop" tabindex="0" role="button" aria-label="Upload a document">
+        <b>Upload</b> a TXT, PDF or DOCX file, or drop it here
+      </div>
+      <input type="file" id="file" accept=".txt,.md,.pdf,.docx" class="hidden">
+      <textarea id="paste" placeholder="…or paste the process text here" aria-label="Paste process text"></textarea>
+      <div class="row">
+        <button class="btn" id="go">Build the model</button>
+        <span class="note" id="llmnote"></span>
+      </div>
+      <div id="extracting" class="hidden" aria-live="polite"></div>
+      <div id="msg" class="hidden" role="alert"></div>
+    </section>
+    <section class="panel">
+      <h2>Demos · hand-checked models · no language model needed</h2>
+      <div id="demos"></div>
+    </section>
+  </div>
+  <div class="pipeline">
+    <span>document</span><b>→</b><span>numbered sentences</span><b>→</b><span>extraction (local model)</span><b>→</b>
+    <span>process model</span><b>→</b><span>deterministic engine</span><b>→</b><span>findings with evidence</span>
+  </div>
+</main>
+
+<main id="work" class="hidden">
+  <div id="runbar">
+    <div class="cell"><button class="btn" id="run">Run dry test</button></div>
+    <div class="cell count"><b id="c-scen">–</b><small>Scenarios tested</small></div>
+    <div class="cell count"><b id="c-done">–</b><small>Completed</small></div>
+    <div class="cell count"><b id="c-amb">–</b><small>Ambiguous</small></div>
+    <div class="cell count" id="c-prob-cell"><b id="c-prob">–</b><small>Structural problems</small></div>
+    <div class="cell grow">
+      <div id="now">Not run yet.</div>
+      <div id="track"><div id="bar"></div></div>
+      <div id="origin"></div>
+    </div>
+  </div>
+  <div id="grid">
+    <section class="col">
+      <div class="colhead">
+        <button class="tab on" data-tab="map">Process map</button>
+        <button class="tab" data-tab="json">Model JSON</button>
+      </div>
+      <div class="colbody" id="map"></div>
+      <div class="colbody hidden" id="jsonwrap"><pre id="json"></pre></div>
+      <div id="legend"></div>
+    </section>
+    <section class="col">
+      <div class="colhead">Source text</div>
+      <div class="colbody" id="src"></div>
+    </section>
+    <section class="col">
+      <div class="colhead">
+        <button class="tab on" data-list="findings" id="tab-f">Findings</button>
+        <button class="tab" data-list="scenarios" id="tab-s">Scenarios</button>
+      </div>
+      <div id="banner" class="hidden"></div>
+      <div class="colbody" id="list"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const NS = "http://www.w3.org/2000/svg";
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const S = { process: null, layout: null, report: null, sel: null, selScen: null, filter: "ALL", list: "findings", meta: {} };
+const TYPE_LABEL = { DEAD_END: "DEAD END", TRAPDOOR: "TRAPDOOR", MISSING_RECOVERY: "MISSING RECOVERY",
+  SILENT_DEFAULT: "SILENT DEFAULT", OWNERLESS: "OWNERLESS", UNREACHABLE: "UNREACHABLE", LOOP: "LOOP",
+  DEADLINE_NO_CONSEQUENCE: "DEADLINE, NO CONSEQUENCE", FAILURE_UNADDRESSED: "FAILURE UNADDRESSED", RACE: "SIMULTANEOUS" };
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || `Request failed (${r.status})`);
+  return body;
+}
+
+/* ---------------- landing ---------------- */
+async function boot() {
+  try {
+    const demos = await api("/api/demos");
+    $("#demos").innerHTML = demos.map(d =>
+      `<button class="demo" data-id="${esc(d.id)}"><em>${d.clauses} clauses</em><strong>${esc(d.title)}</strong><span>${esc(d.blurb)}</span></button>`).join("");
+    $$(".demo").forEach(b => b.onclick = () => openDemo(b.dataset.id));
+  } catch (e) { fail("Could not load the demos: " + e.message); }
+  try {
+    const st = await api("/api/status");
+    S.meta.status = st;
+    const l = st.llm;
+    const state = !l.reachable ? "not running" : !l.model_present ? "model not pulled" : "ready";
+    $("#llmchip").textContent = `local model: ${l.model} · ${state}`;
+    $("#llmnote").textContent = state === "ready" ? `Read by ${l.model}, running locally.`
+      : state === "not running" ? "Ollama is not running. Demos still work."
+      : `Run “ollama pull ${l.model}” first. Demos still work.`;
+  } catch (e) { /* status is informational */ }
+}
+function fail(text) { const m = $("#msg"); m.textContent = text; m.classList.remove("hidden"); }
+function clearMsg() { $("#msg").classList.add("hidden"); }
+
+async function openDemo(id) {
+  clearMsg();
+  try { openProcess(await api("/api/demos/" + encodeURIComponent(id)), {}); }
+  catch (e) { fail(e.message); }
+}
+
+const drop = $("#drop"), fileInput = $("#file");
+let chosen = null;
+drop.onclick = () => fileInput.click();
+drop.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } };
+fileInput.onchange = () => pick(fileInput.files[0]);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); pick(e.dataTransfer.files[0]); };
+function pick(f) {
+  if (!f) return;
+  chosen = f;
+  drop.innerHTML = `<b>${esc(f.name)}</b> selected · ${Math.max(1, Math.round(f.size / 1024))} KB`;
+}
+$("#go").onclick = async () => {
+  clearMsg();
+  const text = $("#paste").value.trim();
+  if (!chosen && !text) return fail("Upload a file or paste some text first.");
+  const fd = new FormData();
+  if (chosen) fd.append("file", chosen); else fd.append("text", text);
+  const box = $("#extracting");
+  $("#go").disabled = true;
+  try {
+    const { job } = await api("/api/extract", { method: "POST", body: fd });
+    box.classList.remove("hidden");
+    box.innerHTML = "<div>Splitting the text into numbered sentences</div>";
+    for (;;) {
+      await new Promise(r => setTimeout(r, 400));
+      const j = await api("/api/jobs/" + job);
+      box.innerHTML = ["Splitting the text into numbered sentences", ...j.messages].map(m => `<div>${esc(m)}</div>`).join("");
+      box.scrollTop = box.scrollHeight;
+      if (j.status === "failed") throw new Error(j.error);
+      if (j.status === "done") { openProcess(j.result, { log: j.result.log, model: j.result.model }); break; }
+    }
+  } catch (e) { fail(e.message); }
+  box.classList.add("hidden");
+  $("#go").disabled = false;
+};
+
+/* ---------------- workspace ---------------- */
+function openProcess(payload, meta) {
+  Object.assign(S, { process: payload.process, layout: payload.layout, report: null, sel: null, selScen: null,
+    filter: "ALL", list: "findings" });
+  S.meta.extract = meta;
+  $("#landing").classList.add("hidden");
+  $("#work").classList.remove("hidden");
+  $("#newtest").classList.remove("hidden");
+  $("#htitle").textContent = S.process.title;
+  const p = S.process;
+  $("#origin").textContent = p.origin === "llm"
+    ? `Model extracted by ${meta.model || "a local model"} (${(meta.log || []).join(", ")}). Check it against the source.`
+    : `Hand-checked model · ${p.states.length} states · ${p.transitions.length} transitions · ${p.sentences.length} sentences`;
+  ["c-scen", "c-done", "c-amb", "c-prob"].forEach(id => $("#" + id).textContent = "–");
+  $("#c-prob-cell").classList.remove("bad");
+  $("#bar").style.width = "0";
+  $("#now").textContent = "Not run yet.";
+  $("#run").disabled = false;
+  $("#json").textContent = JSON.stringify(p, null, 2);
+  drawMap(); drawSource(); drawList(); setTab("map"); paint();
+}
+$("#newtest").onclick = () => {
+  $("#work").classList.add("hidden"); $("#landing").classList.remove("hidden");
+  $("#newtest").classList.add("hidden"); $("#htitle").textContent = "";
+};
+$$(".tab[data-tab]").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+function setTab(t) {
+  $$(".tab[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+  $("#map").classList.toggle("hidden", t !== "map");
+  $("#legend").classList.toggle("hidden", t !== "map");
+  $("#jsonwrap").classList.toggle("hidden", t !== "json");
+}
+$$(".tab[data-list]").forEach(b => b.onclick = () => { S.list = b.dataset.list; drawList(); });
+
+/* ---------------- map ---------------- */
+function wrap(label, max) {
+  const lines = [""];
+  for (const w of label.split(/\s+/)) {
+    const cur = lines[lines.length - 1];
+    if (cur && (cur + " " + w).length > max) lines.push(w); else lines[lines.length - 1] = cur ? cur + " " + w : w;
+  }
+  if (lines.length > 2) { lines[1] = (lines[1] + " " + lines.slice(2).join(" ")).slice(0, max - 1) + "…"; lines.length = 2; }
+  return lines;
+}
+function el(name, attrs, parent) {
+  const e = document.createElementNS(NS, name);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function bez(p0, p1, p2, p3, t) {
+  const u = 1 - t;
+  return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+}
+function route(t, N, shift, W) {
+  const a = N[t.from], b = N[t.to];
+  const acx = a.x + a.w / 2, acy = a.y + a.h / 2, bcx = b.x + b.w / 2, bcy = b.y + b.h / 2;
+  let P;
+  let lab = null;
+  if (t.from === t.to) {
+    const x = a.x + a.w, y = acy;
+    P = [x, y - 12, x + 40, y - 36, x + 40, y + 36, x, y + 12];
+    lab = [x + 10, a.y - 9];
+  } else if (b.layer === a.layer && Math.abs(b.slot - a.slot) === 1) {
+    const right = bcx > acx, x1 = right ? a.x + a.w : a.x, x2 = right ? b.x : b.x + b.w;
+    P = [x1, acy + shift, (x1 + x2) / 2, acy + shift, (x1 + x2) / 2, bcy + shift, x2, bcy + shift];
+    lab = [(x1 + x2) / 2, a.y + a.h + 17 + Math.abs(shift) / 2];
+  } else if (b.layer === a.layer) {
+    const up = a.y - 52 - Math.abs(shift);
+    P = [acx, a.y, acx, up, bcx, up, bcx, b.y];
+  } else if (Math.abs(b.layer - a.layer) === 1 || Math.abs(bcx - acx) > a.w * .8) {
+    const down = b.layer > a.layer, lean = Math.max(-50, Math.min(50, (bcx - acx) / 5));
+    const x1 = acx + shift + lean, x2 = bcx + shift - lean;
+    const y1 = down ? a.y + a.h : a.y, y2 = down ? b.y : b.y + b.h, dy = (y2 - y1) * .55;
+    P = [x1, y1, x1, y1 + dy, x2, y2 - dy, x2, y2];
+    lab = [bez(x1, x1, x2, x2, .5), bez(y1, y1 + dy, y2 - dy, y2, .5) - 6 + shift * .6];
+  } else {
+    // skipping layers in the same column, or going back up: leave and enter by the side
+    const side = (Math.abs(bcx - acx) < 4 ? (acx >= W / 2 ? 1 : -1) : (bcx > acx ? 1 : -1));
+    const x1 = side > 0 ? a.x + a.w : a.x, x2 = side > 0 ? b.x + b.w : b.x;
+    const out = Math.max(x1, x2) * (side > 0 ? 1 : 0) + Math.min(x1, x2) * (side > 0 ? 0 : 1) + side * (44 + 14 * Math.abs(b.layer - a.layer) + Math.abs(shift));
+    P = [x1, acy + shift / 2, out, acy, out, bcy, x2, bcy + shift / 2];
+  }
+  return { d: `M${P[0]},${P[1]} C${P[2]},${P[3]} ${P[4]},${P[5]} ${P[6]},${P[7]}`,
+           lx: lab ? lab[0] : bez(P[0], P[2], P[4], P[6], .5), ly: lab ? lab[1] : bez(P[1], P[3], P[5], P[7], .5) - 6 };
+}
+function drawMap() {
+  const p = S.process, L = S.layout, N = L.nodes, pad = 48;
+  const host = $("#map"); host.innerHTML = "";
+  const svg = el("svg", { viewBox: `${-pad} 0 ${L.width + 2 * pad} ${L.height}`, width: L.width + 2 * pad, role: "img",
+    "aria-label": "Process map: " + p.title }, host);
+  const defs = el("defs", {}, svg);
+  for (const [id, color] of [["a-navy", "#14233F"], ["a-coral", "#C9553F"]])
+    el("path", { d: "M0,0 L8,4 L0,8 z", fill: color }, el("marker", { id, viewBox: "0 0 8 8", refX: 7.2, refY: 4,
+      markerWidth: 9, markerHeight: 9, markerUnits: "userSpaceOnUse", orient: "auto-start-reverse" }, defs));
+  const pairs = {};
+  p.transitions.forEach(t => { const k = [t.from, t.to].sort().join("|"); (pairs[k] = pairs[k] || []).push(t.id); });
+  const gE = el("g", {}, svg), gN = el("g", {}, svg), gL = el("g", {}, svg);
+  for (const t of p.transitions) {
+    const group = pairs[[t.from, t.to].sort().join("|")];
+    const shift = (group.indexOf(t.id) - (group.length - 1) / 2) * 30;
+    const r = route(t, N, shift, L.width);
+    const g = el("g", { class: `edge ${t.trigger} ${t.kind}`, "data-id": t.id }, gE);
+    el("path", { class: "hitbox", d: r.d }, g);
+    el("path", { class: "line", d: r.d, "marker-end": "url(#a-navy)" }, g);
+    const who = t.trigger === "timer" ? "timer" : t.actor ? actorName(t.actor) : t.trigger === "event" ? "outside event" : "nobody named";
+    const label = t.action.length > 42 ? t.action.slice(0, 41) + "…" : t.action;
+    const tx = el("text", { class: "elabel", "data-id": t.id, "data-y": r.ly, x: r.lx, y: r.ly }, gL);
+    tx.textContent = `${who}: ${label}`;
+    g.onmouseenter = () => tx.classList.add("show"); g.onmouseleave = () => tx.classList.remove("show");
+    el("title", {}, g).textContent = `${t.id} · ${who}: ${t.action}` + (t.deadline ? ` (${t.deadline})` : "") + ` · cites ${t.evidence.join(", ") || "nothing"}`;
+    g.onclick = () => cite({ transitions: [t.id], states: [], sentences: t.evidence });
+  }
+  for (const s of p.states) {
+    const n = N[s.id];
+    const g = el("g", { class: `node ${s.kind}`, "data-id": s.id }, gN);
+    el("rect", { x: n.x, y: n.y, width: n.w, height: n.h, rx: 5 }, g);
+    if (s.kind === "terminal") el("rect", { class: "inner", x: n.x + 3.5, y: n.y + 3.5, width: n.w - 7, height: n.h - 7, rx: 3 }, g);
+    const tag = s.kind === "start" ? "START" : s.kind === "setback" ? "SETBACK"
+      : s.kind === "terminal" ? "END · " + (s.outcome || "neutral").toUpperCase() : "";
+    const lines = wrap(s.label, 21);
+    let y = n.y + n.h / 2 + 4 - (lines.length - 1) * 8 + (tag ? 7 : 0);
+    if (tag) el("text", { class: "tag", x: n.x + n.w / 2, y: n.y + 15 }, g).textContent = tag;
+    for (const line of lines) { el("text", { x: n.x + n.w / 2, y }, g).textContent = line; y += 16; }
+    el("title", {}, g).textContent = `${s.id} · ${s.kind}` + (s.outcome ? ` (${s.outcome})` : "") + ` · cites ${s.evidence.join(", ") || "nothing"}`;
+    g.onclick = () => cite({ states: [s.id], transitions: [], sentences: s.evidence });
+  }
+  const sw = (dash, w) => `<svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#14233F" stroke-width="${w}" stroke-dasharray="${dash}" stroke-linecap="round"/></svg>`;
+  $("#legend").innerHTML = `<span>${sw("", 1.3)}someone acts</span><span>${sw("1.5 4", 2)}timer</span>
+    <span>${sw("10 4", 1.3)}outside event</span><span>${sw("4 3", 1.3)}recovery after a failure</span>
+    <span>double border = final state</span><span>click a state, arrow or sentence to trace it</span>`;
+}
+const actorName = id => (S.process.actors.find(a => a.id === id) || { name: id }).name;
+
+/* ---------------- source ---------------- */
+function drawSource() {
+  $("#src").innerHTML = S.process.sentences.map(s =>
+    `<div class="sent" data-id="${esc(s.id)}"><span class="n">${esc(s.id)}</span><span>${esc(s.text)}</span></div>`).join("");
+  $$("#src .sent").forEach(d => d.onclick = () => {
+    const id = d.dataset.id, p = S.process;
+    cite({ sentences: [id], states: p.states.filter(s => s.evidence.includes(id)).map(s => s.id),
+           transitions: p.transitions.filter(t => t.evidence.includes(id)).map(t => t.id) });
+  });
+}
+
+/* ---------------- highlighting ---------------- */
+let trace = null;  // an ad-hoc trace from clicking the map or the source
+function cite(t) { trace = t; S.sel = null; S.selScen = null; drawList(); paint(); }
+function paint() {
+  const svg = $("#map svg"); if (!svg) return;
+  const f = S.report && S.sel ? S.report.findings.find(x => x.id === S.sel) : null;
+  const sc = S.report && S.selScen ? S.report.scenarios.find(x => x.id === S.selScen) : null;
+  const p = S.process;
+  let path = [], hitS = [], hitT = [], citeS = [], citeT = [], ev = {}, amb = false;
+  if (f) { path = f.path; hitS = f.states; hitT = f.transitions; amb = f.severity !== "problem";
+           f.evidence.forEach(e => ev[e.sentence] = e.because); }
+  else if (sc) { path = sc.path; amb = sc.status !== "problem"; hitS = sc.status === "completed" ? [] : [sc.state];
+                 sc.story.forEach(st => { if (st.transition && !path.includes(st.transition)) hitT.push(st.transition); });
+                 if (sc.status === "completed") { path = path.concat(hitT); hitT = []; } }
+  else if (trace) { citeS = trace.states; citeT = trace.transitions; }
+  const pathS = new Set(path.length || f || sc ? [p.start] : []);
+  path.forEach(id => { const t = p.transitions.find(x => x.id === id); if (t) { pathS.add(t.from); pathS.add(t.to); } });
+  const focus = !!(f || sc || trace);
+  svg.setAttribute("class", (focus ? "focus " : "") + (amb ? "amb" : ""));
+  $$(".node", svg).forEach(g => { const id = g.dataset.id;
+    g.setAttribute("class", g.getAttribute("class").replace(/ (path|hit|cite|pulse)\b/g, "")
+      + (hitS.includes(id) ? " hit" : "") + (pathS.has(id) ? " path" : "") + (citeS.includes(id) ? " cite" : "")); });
+  $$(".edge", svg).forEach(g => { const id = g.dataset.id, hit = hitT.includes(id);
+    g.setAttribute("class", g.getAttribute("class").replace(/ (path|hit|cite)\b/g, "")
+      + (hit ? " hit" : "") + (path.includes(id) ? " path" : "") + (citeT.includes(id) ? " cite" : ""));
+    $(".line", g).setAttribute("marker-end", hit && !amb ? "url(#a-coral)" : "url(#a-navy)");
+    if (hit || path.includes(id) || citeT.includes(id)) g.parentNode.appendChild(g); });
+  $$(".elabel", svg).forEach(tx => { const id = tx.dataset.id;
+    tx.setAttribute("class", "elabel" + (hitT.includes(id) && hitT.length <= 3 ? " hit" : "") + (path.includes(id) ? " path" : "") + (citeT.includes(id) ? " cite" : "")); });
+  // keep the labels that are showing from sitting on top of each other
+  const placed = [];
+  $$(".elabel.hit, .elabel.path, .elabel.cite", svg).sort((x, y) => x.dataset.y - y.dataset.y).forEach(tx => {
+    let y = +tx.dataset.y; tx.setAttribute("y", y);
+    let box = tx.getBBox();
+    for (let guard = 0; guard < 12 && placed.some(q => box.x < q.x + q.width && q.x < box.x + box.width && box.y < q.y + q.height && q.y < box.y + box.height); guard++) {
+      y += 16; tx.setAttribute("y", y); box = tx.getBBox();
+    }
+    placed.push(box);
+  });
+  $("#src").classList.toggle("focus", focus && (f || (trace && trace.sentences.length)) ? true : false);
+  let first = null;
+  $$("#src .sent").forEach(d => {
+    const id = d.dataset.id, isEv = id in ev, isCite = !f && trace && trace.sentences.includes(id);
+    d.className = "sent" + (isEv ? " ev" + (amb ? " amb" : "") : "") + (isCite ? " cite" : "");
+    const old = $(".because", d); if (old) old.remove();
+    if (isEv) { const b = document.createElement("div"); b.className = "because"; b.textContent = ev[id]; d.appendChild(b); }
+    if ((isEv || isCite) && !first) first = d;
+  });
+  if (first) first.scrollIntoView({ block: "nearest" });
+}
+function pulse(stateId) {
+  $$(".node").forEach(g => g.classList.toggle("pulse", g.dataset.id === stateId));
+}
+
+/* ---------------- run ---------------- */
+let wantRefute = false;
+$("#run").onclick = async () => {
+  const btn = $("#run"); btn.disabled = true;
+  trace = null; S.sel = null; S.selScen = null; S.report = null; drawList(); paint();
+  $("#now").textContent = S.process.origin === "llm" ? "Running the engine, then checking absence findings against the text…" : "Running the engine…";
+  let report;
+  try { report = await api("/api/run", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ process: S.process, refute: wantRefute }) }); }
+  catch (e) { $("#now").textContent = "Run failed: " + e.message; btn.disabled = false; return; }
+  // The engine has already finished. Replay its scenarios so each one can be seen.
+  const sc = report.scenarios, c = { completed: 0, ambiguous: 0, problem: 0 };
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const delay = still ? 0 : Math.max(25, Math.min(110, 2400 / sc.length));
+  for (let i = 0; i < sc.length; i++) {
+    c[sc[i].status]++;
+    $("#bar").style.width = ((i + 1) / sc.length * 100) + "%";
+    $("#now").textContent = `${sc[i].id} · ${sc[i].cls_label} · ${sc[i].title}`;
+    $("#c-scen").textContent = i + 1; $("#c-done").textContent = c.completed; $("#c-amb").textContent = c.ambiguous;
+    if (delay) await new Promise(r => setTimeout(r, delay));
+  }
+  const sm = report.summary;
+  $("#c-prob").textContent = sm.structural_findings;
+  $("#c-prob-cell").classList.toggle("bad", sm.structural_findings > 0);
+  $("#now").textContent = `Done. ${sm.scenarios} scenarios over ${sm.configurations_explored} reachable configurations. `
+    + `${sm.structural_findings} structural problem${sm.structural_findings === 1 ? "" : "s"}, ${sm.ambiguous_findings} ambiguit${sm.ambiguous_findings === 1 ? "y" : "ies"}.`
+    + (sm.unverified_findings ? ` ${sm.unverified_findings} unverified.` : "")
+    + (S.process.origin === "llm" ? ` Refutation pass: ${report.refutation}.` : "");
+  S.report = report; S.list = "findings"; btn.disabled = false; btn.textContent = "Run again";
+  drawList();
+};
+
+/* ---------------- findings and scenarios ---------------- */
+function drawList() {
+  const host = $("#list"), r = S.report;
+  $("#tab-f").classList.toggle("on", S.list === "findings");
+  $("#tab-s").classList.toggle("on", S.list === "scenarios");
+  $("#tab-f").textContent = r ? `Findings (${r.findings.length})` : "Findings";
+  $("#tab-s").textContent = r ? `Scenarios (${r.scenarios.length})` : "Scenarios";
+  const banner = $("#banner");
+  banner.classList.toggle("hidden", !(S.process && S.process.origin === "llm"));
+  banner.innerHTML = "This model was extracted automatically. Confidence is lowered on every finding; verify against the cited sentences."
+    + (S.report ? ` <button class="fchip" id="refute">Ask the model to look for counter-evidence</button>` : "");
+  const rb = $("#refute");
+  if (rb) rb.onclick = async () => { wantRefute = true; try { await $("#run").onclick(); } finally { wantRefute = false; } };
+  if (!r) {
+    host.innerHTML = `<div class="empty"><b>No test has been run.</b><br>“Run dry test” walks every reachable configuration of this
+      model and injects: a step failing, a party not responding, a missed deadline, an unavailable actor, two things happening
+      at once, and a retry or withdrawal. The engine is deterministic and makes no language-model calls.</div>`;
+    return;
+  }
+  if (S.list === "scenarios") {
+    host.innerHTML = r.scenarios.map(s => `<button class="scen${s.id === S.selScen ? " sel" : ""}" data-id="${s.id}">
+      <span class="n">${s.id}</span><span>${esc(s.title)}<small>${esc(s.cls_label)} · ${esc(s.note)}${s.finding ? " · " + s.finding : ""}</small></span>
+      <span class="st ${s.status}">${s.status}</span></button>`).join("");
+    $$(".scen", host).forEach(b => b.onclick = () => { S.selScen = b.dataset.id; S.sel = null; trace = null; drawList(); paint(); });
+    return;
+  }
+  const types = {};
+  r.findings.forEach(f => types[f.type] = (types[f.type] || 0) + 1);
+  const chips = [["ALL", r.findings.length]].concat(Object.entries(types));
+  let html = `<div id="filters">` + chips.map(([t, n]) =>
+    `<button class="fchip${S.filter === t ? " on" : ""}" data-t="${t}">${t === "ALL" ? "ALL" : TYPE_LABEL[t] || t} ${n}</button>`).join("") + `</div>`;
+  const shown = r.findings.filter(f => S.filter === "ALL" || f.type === S.filter);
+  if (!r.findings.length) html += `<div class="empty"><b>No findings.</b><br>Every injected scenario reached a defined outcome.</div>`;
+  for (const f of shown) {
+    const sel = f.id === S.sel;
+    html += `<div class="card ${f.severity === "problem" ? "problem" : "ambiguous"}${sel ? " sel" : ""}"><button data-id="${f.id}" aria-expanded="${sel}">
+      <div class="meta"><span class="badge">${TYPE_LABEL[f.type] || f.type}${f.severity === "unverified" ? " · UNVERIFIED" : ""}</span><span class="fid">${f.id}</span>
+      <span class="conf" title="Confidence ${f.confidence}">${f.confidence_label} ${Math.round(f.confidence * 100)}%<i><b style="width:${f.confidence * 100}%"></b></i></span></div>
+      <h3>${esc(f.title)}</h3></button>${sel ? detail(f) : ""}</div>`;
+  }
+  host.innerHTML = html;
+  $$(".fchip", host).forEach(b => b.onclick = () => { S.filter = b.dataset.t; drawList(); });
+  $$(".card > button", host).forEach(b => b.onclick = () => {
+    S.sel = S.sel === b.dataset.id ? null : b.dataset.id; S.selScen = null; trace = null; drawList(); paint();
+    const card = $(".card.sel", host); if (card) card.scrollIntoView({ block: "nearest" });
+  });
+  $$(".story li", host).forEach(li => { li.onmouseenter = () => pulse(li.dataset.state); li.onmouseleave = () => pulse(null); });
+  $$(".evi", host).forEach(d => d.onclick = () => {
+    const row = $(`#src .sent[data-id="${d.dataset.id}"]`); if (row) row.scrollIntoView({ block: "center" });
+  });
+}
+function detail(f) {
+  const story = f.story.map((s, i) => `<li class="${s.kind}" data-state="${esc(s.state || "")}"><span class="who">${i + 1}. ${esc(s.who)}</span>
+    ${esc(s.text)}${s.to ? ` <span class="to">→ ${esc(s.to)}</span>` : ""}</li>`).join("");
+  const evid = f.evidence.map(e => `<div class="evi${e.refutation ? " refute" : ""}" data-id="${esc(e.sentence)}"><span class="n">${esc(e.sentence)}</span>
+    “${esc(e.text)}”<small>${esc(e.because)}</small></div>`).join("");
+  const lowered = f.rests_on.length ? ` Lowered because it rests on ${f.rests_on.join("; and on ")}.` : " Nothing lowers it: the finding follows from stated rules in a hand-checked model.";
+  return `<div class="detail">
+    <p>${esc(f.explanation)}</p>
+    ${f.severity === "unverified" ? `<p><b>Unverified.</b> This rests on a step the model could not tie to a sentence. It may be a gap in the extracted model rather than in the document, so it is not counted as a structural problem.</p>` : ""}
+    ${f.status === "downgraded" ? `<p><b>Downgraded to ambiguous.</b> A second pass found a sentence (${esc(f.refuted_by)}) that may already cover this.</p>` : ""}
+    ${story ? `<h4>Scenario: ${esc(f.scenario)}</h4><ol class="story">${story}</ol>` : ""}
+    <h4>Evidence</h4>${evid}
+    <h4>What is missing</h4><p>${esc(f.missing)}</p>
+    <h4>Why this was flagged</h4><ol>${f.why.map(w => `<li>${esc(w)}</li>`).join("")}</ol>
+    <h4>Confidence</h4><p>${f.confidence.toFixed(2)} (${f.confidence_label}).${esc(lowered)}</p>
+    ${f.scenarios.length ? `<p class="note mono">Seen in ${f.scenarios.join(", ")}</p>` : ""}
+  </div>`;
+}
+boot();
+</script>
+</body>
+</html>
