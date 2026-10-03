@@ -163,7 +163,7 @@ svg.amb .edge.hit path.line { stroke: var(--navy); }
 .ambiguous .badge { background: transparent; color: var(--navy); box-shadow: inset 0 0 0 1px var(--navy); }
 .fid { font: 11px var(--mono); color: var(--muted); }
 .conf { margin-left: auto; font: 11px var(--mono); color: var(--muted); display: flex; align-items: center; gap: 6px; }
-.conf i { display: inline-block; width: 46px; height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.conf i { display: none; width: 46px; height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
 .conf i b { display: block; height: 100%; background: var(--navy); }
 .card h3 { margin: 0; font-size: 14.5px; line-height: 1.35; color: var(--ink); font-weight: 600; }
 .detail { padding: 2px 14px 16px 17px; background: var(--paper); }
@@ -186,6 +186,22 @@ svg.amb .edge.hit path.line { stroke: var(--navy); }
 .evi .n { font: 11px var(--mono); color: var(--navy); }
 .evi small { display: block; color: var(--muted); }
 .evi.refute { border-left-color: var(--navy); }
+.group { padding: 12px 14px 8px; border-bottom: 1px solid var(--line); background: var(--ivory); position: sticky; top: 0; z-index: 1; }
+.group b { font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--navy); }
+.group.problem b { color: var(--coral); }
+.group span { display: block; font-size: 12.5px; color: var(--muted); }
+.means { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.story li.now { background: var(--navy-soft); }
+.replay { margin: 0 0 0 8px; font: 11px var(--mono); padding: 2px 8px; border-radius: 10px; border: 1px solid var(--navy);
+  background: transparent; color: var(--navy); text-transform: none; letter-spacing: 0; }
+.replay:hover { background: var(--navy-soft); }
+svg.focus .node.pulse { opacity: 1; }
+.node.pulse rect { fill: var(--navy-soft); }
+.node.pulse text { fill: var(--ink); } .node.pulse .tag { fill: var(--navy); }
+#mapcap { padding: 8px 14px; font-size: 12.5px; border-bottom: 1px solid var(--line-soft); color: var(--muted); flex: none; }
+#mapcap i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin: 0 5px 0 10px; background: var(--navy); }
+#mapcap i.c { background: var(--coral); }
+.steps { margin: 10px 0 0; padding-left: 20px; } .steps li { margin-bottom: 4px; }
 .empty { padding: 28px 18px; color: var(--muted); }
 .empty b { color: var(--ink); }
 .scen { display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; width: 100%; text-align: left; background: none;
@@ -226,7 +242,11 @@ svg.amb .edge.hit path.line { stroke: var(--navy); }
     sentences it rests on.</p>
   <div class="cols">
     <section class="panel">
-      <h2>Your document</h2>
+      <h2>Start here · hand-checked examples</h2>
+      <div id="demos"></div>
+    </section>
+    <section class="panel">
+      <h2>Your own document · read by a local open-weight model · experimental</h2>
       <div id="drop" tabindex="0" role="button" aria-label="Upload a document">
         <b>Upload</b> a TXT, PDF or DOCX file, or drop it here
       </div>
@@ -238,10 +258,6 @@ svg.amb .edge.hit path.line { stroke: var(--navy); }
       </div>
       <div id="extracting" class="hidden" aria-live="polite"></div>
       <div id="msg" class="hidden" role="alert"></div>
-    </section>
-    <section class="panel">
-      <h2>Demos · hand-checked models · no language model needed</h2>
-      <div id="demos"></div>
     </section>
   </div>
   <div class="pipeline">
@@ -269,6 +285,7 @@ svg.amb .edge.hit path.line { stroke: var(--navy); }
         <button class="tab on" data-tab="map">Process map</button>
         <button class="tab" data-tab="json">Model JSON</button>
       </div>
+      <div id="mapcap"></div>
       <div class="colbody" id="map"></div>
       <div class="colbody hidden" id="jsonwrap"><pre id="json"></pre></div>
       <div id="legend"></div>
@@ -298,6 +315,18 @@ const S = { process: null, layout: null, report: null, sel: null, selScen: null,
 const TYPE_LABEL = { DEAD_END: "DEAD END", TRAPDOOR: "TRAPDOOR", MISSING_RECOVERY: "MISSING RECOVERY",
   SILENT_DEFAULT: "SILENT DEFAULT", OWNERLESS: "OWNERLESS", UNREACHABLE: "UNREACHABLE", LOOP: "LOOP",
   DEADLINE_NO_CONSEQUENCE: "DEADLINE, NO CONSEQUENCE", FAILURE_UNADDRESSED: "FAILURE UNADDRESSED", RACE: "SIMULTANEOUS" };
+
+const TYPE_MEANS = {
+  DEAD_END: "The case reaches a point with no defined next step.",
+  TRAPDOOR: "Exits exist, but each needs something this person cannot get.",
+  MISSING_RECOVERY: "A recovery is promised, but cannot be used when it is needed.",
+  SILENT_DEFAULT: "Someone else does nothing, and the case ends against the person.",
+  OWNERLESS: "A step has to happen, and nobody is named to do it.",
+  UNREACHABLE: "A provision exists on paper that no one can ever use.",
+  LOOP: "The case goes round in a circle that never ends.",
+  DEADLINE_NO_CONSEQUENCE: "A deadline is set, with no stated consequence.",
+  FAILURE_UNADDRESSED: "A step can fail, and the text does not say what happens.",
+  RACE: "Two things can happen at once, and the text does not say which wins." };
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
@@ -403,6 +432,7 @@ function setTab(t) {
   $("#map").classList.toggle("hidden", t !== "map");
   $("#legend").classList.toggle("hidden", t !== "map");
   $("#jsonwrap").classList.toggle("hidden", t !== "json");
+  $("#mapcap").classList.toggle("hidden", t !== "map");
 }
 $$(".tab[data-list]").forEach(b => b.onclick = () => { S.list = b.dataset.list; drawList(); });
 
@@ -535,6 +565,10 @@ function paint() {
   const pathS = new Set(path.length || f || sc ? [p.start] : []);
   path.forEach(id => { const t = p.transitions.find(x => x.id === id); if (t) { pathS.add(t.from); pathS.add(t.to); } });
   const focus = !!(f || sc || trace);
+  $("#mapcap").innerHTML = f ? `Showing ${esc(f.id)}:<i></i>the path taken<i class="${amb ? "" : "c"}"></i>where it ${amb ? "is unclear" : "breaks"}`
+    : sc ? `Showing scenario ${esc(sc.id)}:<i></i>the path taken`
+    : trace ? "Showing the states, steps and sentences linked to what you clicked."
+    : "The process as a state machine. Nothing is highlighted.";
   svg.setAttribute("class", (focus ? "focus " : "") + (amb ? "amb" : ""));
   $$(".node", svg).forEach(g => { const id = g.dataset.id;
     g.setAttribute("class", g.getAttribute("class").replace(/ (path|hit|cite|pulse)\b/g, "")
@@ -600,7 +634,12 @@ $("#run").onclick = async () => {
     + (sm.unverified_findings ? ` ${sm.unverified_findings} unverified.` : "")
     + (S.process.origin === "llm" ? ` Refutation pass: ${report.refutation}.` : "");
   S.report = report; S.list = "findings"; btn.disabled = false; btn.textContent = "Run again";
-  drawList();
+  const pick = t => report.findings.find(f => f.type === t && f.severity === "problem");
+  const first = pick("MISSING_RECOVERY") || pick("LOOP") || pick("TRAPDOOR")
+    || report.findings.find(f => f.severity === "problem") || report.findings[0];
+  S.sel = first ? first.id : null;
+  drawList(); paint();
+  if (first) replay();
 };
 
 /* ---------------- findings and scenarios ---------------- */
@@ -617,9 +656,12 @@ function drawList() {
   const rb = $("#refute");
   if (rb) rb.onclick = async () => { wantRefute = true; try { await $("#run").onclick(); } finally { wantRefute = false; } };
   if (!r) {
-    host.innerHTML = `<div class="empty"><b>No test has been run.</b><br>“Run dry test” walks every reachable configuration of this
-      model and injects: a step failing, a party not responding, a missed deadline, an unavailable actor, two things happening
-      at once, and a retry or withdrawal. The engine is deterministic and makes no language-model calls.</div>`;
+    host.innerHTML = `<div class="empty"><b>The model is built. Nothing has been run yet.</b>
+      <ol class="steps"><li>The map on the left is the process as a state machine. Click any box or arrow to see the sentence it came from.</li>
+      <li>Press <b>Run dry test</b>. The engine walks every situation the process can reach and injects failures: a step fails,
+      someone does not respond, a deadline is missed, someone is away, two things happen at once, someone retries or withdraws.</li>
+      <li>Each finding shows the path that led there and the sentences that caused it.</li></ol>
+      <p>The engine is deterministic. It makes no language-model calls.</p></div>`;
     return;
   }
   if (S.list === "scenarios") {
@@ -636,23 +678,47 @@ function drawList() {
     `<button class="fchip${S.filter === t ? " on" : ""}" data-t="${t}">${t === "ALL" ? "ALL" : TYPE_LABEL[t] || t} ${n}</button>`).join("") + `</div>`;
   const shown = r.findings.filter(f => S.filter === "ALL" || f.type === S.filter);
   if (!r.findings.length) html += `<div class="empty"><b>No findings.</b><br>Every injected scenario reached a defined outcome.</div>`;
-  for (const f of shown) {
-    const sel = f.id === S.sel;
-    html += `<div class="card ${f.severity === "problem" ? "problem" : "ambiguous"}${sel ? " sel" : ""}"><button data-id="${f.id}" aria-expanded="${sel}">
-      <div class="meta"><span class="badge">${TYPE_LABEL[f.type] || f.type}${f.severity === "unverified" ? " · UNVERIFIED" : ""}</span><span class="fid">${f.id}</span>
-      <span class="conf" title="Confidence ${f.confidence}">${f.confidence_label} ${Math.round(f.confidence * 100)}%<i><b style="width:${f.confidence * 100}%"></b></i></span></div>
-      <h3>${esc(f.title)}</h3></button>${sel ? detail(f) : ""}</div>`;
+  const groups = [
+    ["problem", "Structural problems", "The process cannot do what the text says it does."],
+    ["unverified", "Unverified", "May be a gap in the extracted model rather than in the document."],
+    ["ambiguous", "Ambiguities", "The text leaves an outcome open. Readers may disagree."]];
+  for (const [sev, name, blurb] of groups) {
+    const list = shown.filter(f => f.severity === sev);
+    if (!list.length) continue;
+    html += `<div class="group ${sev}"><b>${name} · ${list.length}</b><span>${blurb}</span></div>`;
+    for (const f of list) {
+      const sel = f.id === S.sel;
+      html += `<div class="card ${sev === "problem" ? "problem" : "ambiguous"}${sel ? " sel" : ""}"><button data-id="${f.id}" aria-expanded="${sel}">
+        <div class="meta"><span class="badge">${TYPE_LABEL[f.type] || f.type}</span><span class="fid">${f.id}</span>
+        <span class="conf" title="Confidence ${f.confidence}">confidence: ${f.confidence_label}</span></div>
+        <h3>${esc(f.title)}</h3>${sel ? "" : `<div class="means">${TYPE_MEANS[f.type] || ""}</div>`}</button>${sel ? detail(f) : ""}</div>`;
+    }
   }
   host.innerHTML = html;
   $$(".fchip", host).forEach(b => b.onclick = () => { S.filter = b.dataset.t; drawList(); });
   $$(".card > button", host).forEach(b => b.onclick = () => {
     S.sel = S.sel === b.dataset.id ? null : b.dataset.id; S.selScen = null; trace = null; drawList(); paint();
     const card = $(".card.sel", host); if (card) card.scrollIntoView({ block: "nearest" });
+    if (S.sel) replay();
   });
+  const rp = $(".replay", host); if (rp) rp.onclick = replay;
   $$(".story li", host).forEach(li => { li.onmouseenter = () => pulse(li.dataset.state); li.onmouseleave = () => pulse(null); });
   $$(".evi", host).forEach(d => d.onclick = () => {
     const row = $(`#src .sent[data-id="${d.dataset.id}"]`); if (row) row.scrollIntoView({ block: "center" });
   });
+}
+let replayRun = 0;
+async function replay() {
+  // Step through the simulated person's path on the map, one state at a time.
+  const run = ++replayRun, items = $$("#list .story li");
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (const li of items) {
+    if (run !== replayRun) return;
+    items.forEach(x => x.classList.toggle("now", x === li));
+    pulse(li.dataset.state);
+    await new Promise(r => setTimeout(r, 750));
+  }
+  if (run === replayRun) { items.forEach(x => x.classList.remove("now")); pulse(null); }
 }
 function detail(f) {
   const story = f.story.map((s, i) => `<li class="${s.kind}" data-state="${esc(s.state || "")}"><span class="who">${i + 1}. ${esc(s.who)}</span>
@@ -664,7 +730,7 @@ function detail(f) {
     <p>${esc(f.explanation)}</p>
     ${f.severity === "unverified" ? `<p><b>Unverified.</b> This rests on a step the model could not tie to a sentence. It may be a gap in the extracted model rather than in the document, so it is not counted as a structural problem.</p>` : ""}
     ${f.status === "downgraded" ? `<p><b>Downgraded to ambiguous.</b> A second pass found a sentence (${esc(f.refuted_by)}) that may already cover this.</p>` : ""}
-    ${story ? `<h4>Scenario: ${esc(f.scenario)}</h4><ol class="story">${story}</ol>` : ""}
+    ${story ? `<h4>What happens: ${esc(f.scenario)} <button class="replay">▶ replay on map</button></h4><ol class="story">${story}</ol>` : ""}
     <h4>Evidence</h4>${evid}
     <h4>What is missing</h4><p>${esc(f.missing)}</p>
     <h4>Why this was flagged</h4><ol>${f.why.map(w => `<li>${esc(w)}</li>`).join("")}</ol>

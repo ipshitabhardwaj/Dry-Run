@@ -46,7 +46,10 @@ def main() -> int:
             print(f"  [{now - clock['t']:5.0f}s since last step] {msg}", flush=True)
             clock["t"] = now
 
-        process, log = extract_process(demo.text, llm, title=demo.title, progress=step)
+        text = demo.text
+        if len(sys.argv) > 1:   # python scripts/check_model.py samples/payment_short.txt
+            text = Path(sys.argv[1]).read_text(encoding="utf-8")
+        process, log = extract_process(text, llm, title=demo.title, progress=step)
         report = dry_run(process)
     except (LLMError, ValueError) as e:
         print("FAILED:", e)
@@ -55,6 +58,8 @@ def main() -> int:
     print(f"states {len(process.states)} (reference {len(demo.states)}), "
           f"transitions {len(process.transitions)} (reference {len(demo.transitions)})")
     got = sorted(f["type"] for f in report["findings"] if f["severity"] == "problem")
+    for st in process.states:
+        print(f"  state {st.id} | {st.kind} {st.outcome or ''} | {st.evidence}")
     for t in process.transitions:
         print(f"  {t.id:4} {t.source} -> {t.target} | {t.actor} | {t.trigger}/{t.kind} | {t.action} "
               f"| req={t.requires} forb={t.forbids} grants={t.grants} rev={t.revokes} "

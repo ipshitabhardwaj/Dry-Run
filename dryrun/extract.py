@@ -37,6 +37,9 @@ def _obj(props: dict, required: Optional[List[str]] = None) -> dict:
     return {"type": "object", "properties": props, "required": required or list(props)}
 
 
+HOW = {"a_person_does_it": "action", "a_deadline_passes": "timer", "an_outside_result": "event"}
+
+
 def _pick(ids=None, nullable=False) -> dict:
     """A string, or when the valid ids are known, exactly one of them. Giving the model
     an enum makes an invented sentence, state or actor id impossible to emit."""
@@ -66,10 +69,13 @@ def schema_actors_states(sents=None) -> dict:
 
 def schema_transitions(sents=None, states=None, actors=None) -> dict:
     return _obj({"transitions": {"type": "array", "maxItems": 16, "items": _obj({
-        "from": _pick(states), "to": _pick(states), "action": _STR, "actor": _pick(actors, True),
-        "trigger": {"type": "string", "enum": ["action", "timer", "event"]},
+        # Field names are chosen so that no name is also a legal value of another field:
+        # a small model given "action" next to an enum containing "action" mixes them up.
+        "sentences": _cites(sents), "step": _STR,
+        "who": _pick(actors, True), "from": _pick(states), "to": _pick(states),
+        "how": {"type": "string", "enum": list(HOW)},
         "deadline": _NSTR, "can_fail": {"type": "boolean"}, "failure_label": _NSTR,
-        "reversal": {"type": "boolean"}, "sentences": _cites(sents)})}})
+        "reversal": {"type": "boolean"}})}})
 
 
 def schema_failures(sents=None, states=None, actors=None, trans=None) -> dict:
@@ -176,7 +182,17 @@ A state is a situation the case rests in, such as "awaiting review" or "refunded
 kind: "start" (exactly one), "normal", "setback" (something went wrong but the case is not over),
 or "terminal" (the case is finished). For terminal states give outcome "success", "failure"
 or "neutral"; otherwise null.
-For every actor and state give the ids of the sentences that mention it.""",
+For every actor and state give the ids of the sentences that mention it.
+Rules for states: name each one as a situation ("Seat locked", "Payment pending", "Refunded").
+Give every different ending its own terminal state (completed, cancelled, lapsed, refunded).
+A requirement such as "status is Active" or "has a certificate" is NOT a state; leave it out.
+
+EXAMPLE (a different procedure, to show the shape only)
+{{"subject": "Member", "actors": [{{"name": "Member", "sentences": ["c1"]}}, {{"name": "Librarian", "sentences": ["c2"]}}],
+ "states": [{{"label": "Not yet requested", "kind": "start", "outcome": null, "sentences": ["c1"]}},
+  {{"label": "Card requested", "kind": "normal", "outcome": null, "sentences": ["c1"]}},
+  {{"label": "Card issued", "kind": "terminal", "outcome": "success", "sentences": ["c2"]}},
+  {{"label": "Request expired", "kind": "terminal", "outcome": "failure", "sentences": ["c3"]}}]}}""",
                 schema_actors_states(sid_list))
     actors: Dict[str, Actor] = {}
     for item in _list(a.get("actors")):
@@ -224,32 +240,50 @@ SENTENCES:
 {_numbered(chunk)}
 
 For each way these sentences move a case from one state to another, give one item.
-- "from" and "to" must be state ids from the list.
-- "actor" is an actor id from the list, or null if the sentence does not say who does it.
-- "trigger": "action" (someone does it), "timer" (it happens automatically when time runs out),
-  or "event" (an outside result such as a bank confirming).
+- "sentences": the ids of the sentences that say so.
+- "step": what happens, as a short verb phrase copied from the sentence, such as
+  "pay the acceptance fee" or "application is cancelled". Never a single word.
+- "who": the actor id of whoever does it, or null if the sentence does not say who.
+- "from" and "to": state ids from the list. They must be different states.
+- "how": "a_person_does_it", "a_deadline_passes" (it happens automatically when time runs out),
+  or "an_outside_result" (for example a bank confirming).
 - "deadline": the time limit as written, or null.
 - "can_fail": true only if this step can realistically fail (a payment, an upload, a delivery,
   a check by an outside party). "failure_label": how it fails, in a few words, or null.
 - "reversal": true if this is the person cancelling, withdrawing or undoing something.
-- "sentences": the ids of the sentences that say so.""",
+
+EXAMPLE (a different procedure, to show the shape only)
+[c2] The librarian issues the card within 2 days of the request.
+[c3] Requests not handled within 7 days expire.
+{{"transitions": [
+ {{"sentences": ["c2"], "step": "issue the card", "who": "librarian", "from": "card_requested",
+   "to": "card_issued", "how": "a_person_does_it", "deadline": "within 2 days of the request",
+   "can_fail": false, "failure_label": null, "reversal": false}},
+ {{"sentences": ["c3"], "step": "request expires", "who": null, "from": "card_requested",
+   "to": "request_expired", "how": "a_deadline_passes", "deadline": "within 7 days",
+   "can_fail": false, "failure_label": null, "reversal": false}}]}}""",
                     schema_transitions(sid_list, list(states), list(actors)))
         for item in _list(r.get("transitions")):
             if not isinstance(item, dict):
                 continue
             src = _resolve(item.get("from"), states, lambda v: v.label)
             dst = _resolve(item.get("to"), states, lambda v: v.label)
-            action = str(item.get("action") or "").strip()
-            if src is None or dst is None or not action:
+            action = str(item.get("step") or item.get("action") or "").strip()
+            if slug(action) in ("action", "timer", "event", "step") or slug(action) in actors:
+                dropped += 1  # the model put a keyword where the description belongs
+                continue
+            if src is None or dst is None or not action or src == dst:
                 dropped += 1  # refers to a state that does not exist
                 continue
-            actor = _resolve(item.get("actor"), actors, lambda v: v.name)
-            if item.get("actor") and actor is None and slug(item["actor"]) not in ("null", "none", "nobody"):
+            named = item.get("who") or item.get("actor")
+            actor = _resolve(named, actors, lambda v: v.name)
+            if named and actor is None and slug(named) not in ("null", "none", "nobody"):
                 # the model named someone we had not listed: keep them rather than
                 # pretend nobody owns the step
-                actor = slug(item["actor"])
-                actors[actor] = Actor(id=actor, name=str(item["actor"]).strip())
-            trigger = item.get("trigger") if item.get("trigger") in ("action", "timer", "event") else "action"
+                actor = slug(named)
+                actors[actor] = Actor(id=actor, name=str(named).strip())
+            trigger = HOW.get(item.get("how")) or (
+                item.get("trigger") if item.get("trigger") in ("action", "timer", "event") else "action")
             evidence = _ids(item.get("sentences"), sent_ids)
             key = (src, dst, slug(action))
             if key in transitions:
@@ -344,7 +378,14 @@ Part 2. For each transition that depends on or changes one of those conditions, 
 - "forbids": conditions that must NOT be true.
 - "grants": conditions the step makes true. "revokes": conditions the step makes false.
 - "sentences": the ids of the sentences that say so.
-Use only the condition names from Part 1. Leave out transitions with no conditions.""",
+Use only the condition names from Part 1. Leave out transitions with no conditions.
+A condition is never a state: do not use state names as conditions.
+
+EXAMPLE (a different procedure, to show the shape only)
+"[c4] Borrowing is open only to members whose card is valid." and "[c5] Reporting a card lost makes it invalid."
+{{"facts": [{{"name": "card valid", "sentences": ["c4", "c5"]}}],
+ "rules": [{{"transition": "t3", "requires": ["card valid"], "forbids": [], "grants": [], "revokes": [], "sentences": ["c4"]}},
+  {{"transition": "t5", "requires": [], "forbids": [], "grants": [], "revokes": ["card valid"], "sentences": ["c5"]}}]}}""",
                 schema_facts(sid_list, [t.id for t in tlist]))
     facts: Dict[str, Fact] = {}
     for item in _list(r.get("facts")):
@@ -370,6 +411,9 @@ Use only the condition names from Part 1. Leave out transitions with no conditio
                 t.evidence += [c for c in cited if c not in t.evidence]
             else:
                 t.inferred = True  # a condition nobody could point to in the text
+    for t in tlist:  # a "condition" that is just a state name carries no information
+        for field in ("requires", "forbids", "grants", "revokes"):
+            setattr(t, field, [f for f in getattr(t, field) if f not in states])
     used = {f for t in tlist for f in t.requires + t.forbids + t.grants + t.revokes}
     facts = {k: v for k, v in facts.items() if k in used}
     # a requirement that no step produces is assumed to be something the person starts with

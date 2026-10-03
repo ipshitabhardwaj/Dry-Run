@@ -89,7 +89,8 @@ def test_every_call_carries_a_json_schema():
     assert build[0]["properties"]["states"]["items"]["properties"]["sentences"]["items"]["enum"] == ids
     tr = build[1]["properties"]["transitions"]["items"]["properties"]
     assert tr["from"]["enum"] == ["new", "under_review", "approved", "paid", "closed"]
-    assert tr["actor"]["enum"] == ["customer", "support", "bank_transfer_team", None]
+    assert tr["who"]["enum"] == ["customer", "support", "bank_transfer_team", None]
+    assert "action" not in tr and "trigger" not in tr    # no field name doubles as an enum value
     assert schemas[-1]["properties"]["sentence"]["enum"] == ids + [None]
     # the model only ever sees numbered sentences
     assert "[c2] A customer requests a refund by email." in llm.log[0]["user"]
@@ -229,3 +230,20 @@ def test_a_quoted_sentence_is_mapped_back_to_its_id():
     known = {"c1": "Refunds are paid within 5 days.", "c2": "Rejected requests are closed."}
     assert _ids("Refunds are paid within 5 days.", known) == ["c1"]
     assert _ids(["rejected requests are closed", "c1", "nonsense that is long enough"], known) == ["c2", "c1"]
+
+
+def test_keyword_in_place_of_a_step_description_is_dropped():
+    """What phi4-mini actually returned: the word "timer" as the step. That is not a step."""
+    llm = retry_fake({"facts": [], "rules": []})
+    junk = {"transitions": [
+        {"sentences": ["c1"], "step": "timer", "who": None, "from": "offer", "to": "payment_pending",
+         "how": "an_outside_result"},
+        {"sentences": ["c1"], "step": "initiate payment", "who": "applicant", "from": "offer",
+         "to": "payment_pending", "how": "a_person_does_it"},
+        {"sentences": ["c6"], "step": "application is cancelled", "who": None, "from": "payment_pending",
+         "to": "cancelled", "how": "a_deadline_passes"}]}
+    llm.rules = [r if r[0] != "For each way these sentences" else (r[0], junk) for r in llm.rules]
+    process, log = extract_process(RETRY_TEXT, llm)
+    assert [(t.action, t.trigger, t.actor) for t in process.transitions] == [
+        ("initiate payment", "action", "applicant"), ("application is cancelled", "timer", None)]
+    assert any("unknown ids dropped" in line for line in log)
